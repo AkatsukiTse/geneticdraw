@@ -6,6 +6,8 @@ import random
 import thread
 import time
 import math
+import logging
+import os
 from copy import copy
 from copy import deepcopy
 from multiprocessing.dummy import Pool as ThreadPool
@@ -161,23 +163,32 @@ def geneticoptimize(costf, polygonNum=50, popsize=50, step=1, mutprob=0.5, elite
                 totalTime += duration
                 scorestd = lastscore - score
                 img = createImgFromVec(pop)
-                img.save('%d.png'%i)
+                img.save(os.path.join(imgdir,'%d.png'%i))
                 print 'times:%6d    score:%7d    scorestd:%7d    duration:%10f    total:%15f'%(i, score, scorestd, duration, totalTime)
+                logging.debug('%d\t%d\t%d\t%f\t%f'%(i, score, scorestd, duration, totalTime))
             lasttime = nowtime
             lastscore = score
     return pop
 
    
 
-            
+localtime = time.localtime()
+logname = '%d%d%d.log'%(localtime.tm_year, localtime.tm_mon, localtime.tm_mday)            
+logging.basicConfig(
+    level=logging.DEBUG,
+    #format='%(asctime)s %(filename)s[line:%(lineno)d] %(levelname)s %(message)s',
+    format='%(message)s',
+    datefmt='%Y-%m-%d %H:%M:%S',
+    filename=logname,
+    filemode='w') 
     
+imgdir = 'imgs'
+if not os.path.exists(imgdir): os.makedirs(imgdir)
 #多边形的顶点数
 posNum = 3
 #测试图片
 img = Image.open('test.jpg')
 origindata = np.array(img)
-#输入日志
-logfile = open('log.txt', 'w')
 width, height = img.size
 print 'width:%5d,height:%5d'%(width,height)
 #获取图片颜色范围 

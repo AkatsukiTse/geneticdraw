@@ -1,169 +1,117 @@
 #coding:utf-8
-import Image
-import ImageDraw
-import numpy as np
+from PIL import Image,ImageDraw, ImageFilter
 import random
-import thread
 import time
 import math
 import logging
 import os
-from copy import copy
-from copy import deepcopy
-from multiprocessing.dummy import Pool as ThreadPool
+import sys
+import numpy as np
 
-#»˝Ω«–Œ
+#‰∏âËßíÂΩ¢
 class Polygon(object):
-    def __init__(self, pos, color):
+    def __init__(self, pos, color, size):
         if len(pos) < 2: raise Exception
         self.pos = pos
         self.color = color
+        self.size = size
         self.img = None
 
-    #±‰“Ï        
-    def mutate(self):
-        self.img = None       
+    #ÂèòÂºÇ        
+    def mutate(self):  
         if random.random() < 0.5:
-            #µ„Œª÷√±‰“Ï
-            while True:
-                index = random.randint(0,len(self.pos)-1)
-                step = random.randint(-20,20)
-                x = self.pos[index][0]
-                y = self.pos[index][1]
-                if random.random() < 0.5: 
-                    x = x + step
-                    x = 0 if x<0 else width if x>width else x                    
-                else: 
-                    y = y + step
-                    y = 0 if y<0 else height if y>height else y 
-                self.pos[index] = (x,y)
-                #–¬»˝Ω«–Œ√Êª˝–Ë“™¥Û”⁄ÕºœÒ√Êª˝µƒ∞Ÿ∑÷÷Æ“ª
-                if getS(self.pos[0], self.pos[1], self.pos[2]) > width*height*0.01: break 
+            index = random.randrange(0,len(self.pos))
+            self.pos[index] = (random.randrange(0,self.size[0]), random.randrange(0,self.size[1]))
         else:
-            #—’…´±‰“Ï
-            index = random.randint(0,2)
-            step = random.randint(-30,30)
-            color = self.color[index] + step
-            color = colorRange[index][0] \
-                if color<colorRange[index][0] \
-                else colorRange[index][1] \
-                if color>colorRange[index][1] else color
-            self.color[index] = color
-                
+            #È¢úËâ≤ÂèòÂºÇ
+            index = random.randrange(0,4)
+            self.color[index] = random.randrange(0,256)
+            
     def getimg(self):
         if self.img == None:
-            self.img = Image.new('RGBA', (width,height), (255,255,255,0))
-            draw = ImageDraw.Draw(self.img)
-            draw.polygon(self.pos, fill=tuple(self.color))
-        return self.img 
-
-#º∆À„»˝Ω«–Œ√Êª˝        
-def getS(A, B, C):
-    try:
-        a = math.sqrt((A[0]-B[0])**2 + (A[1]-B[1])**2)
-        b = math.sqrt((A[0]-C[0])**2 + (A[1]-C[1])**2)
-        c = math.sqrt((B[0]-C[0])**2 + (B[1]-C[1])**2)
-        p = 0.5*(a+b+c)
-        s = math.sqrt(p*(p-a)*(p-b)*(p-c))
-    except:
-        s = 0
-    #print s
-    return s
-
-#∏ˆÃÂ≥…±æº∆À„    
-def tcost(vec):
-    img = createImgFromVec(vec)
-    data = np.array(img.convert('RGB'))
-    std = data - origindata
+            img = Image.new('RGBA', self.size)
+            draw = ImageDraw.Draw(img)
+            draw.polygon(tuple(self.pos), fill=tuple(self.color), outline=tuple(self.color))
+            self.img = img
+        return self.img
+        
+#ÊàêÊú¨ËÆ°ÁÆó    
+def tcost(vec, originImg):
+    
+    vecImg = createImgFromVec(vec, originImg.size)
+    cost = 0.0
+    for y in range(0, originImg.size[1]):
+        for x in range(0, originImg.size[0]):
+            r1, g1, b1 = originImg.getpixel((x, y))
+            r2, g2, b2 = vecImg.getpixel((x, y))
+            d_r = r1 - r2
+            d_b = b1 - b2
+            d_g = g1 - g2
+            cost += math.sqrt(d_r * d_r + d_g * d_g + d_b * d_b )
+    return cost
+    '''
+    vecData = np.array(vecImg.convert('RGB'))
+    oData = np.array(originImg.convert('RGB'))
+    std = oData - vecData
     std[std<0] = std[std<0] * -1
     return std.sum()
+    '''
 
-#Ω´»˝Ω«–Œ ˝◊È◊™ªªŒ™ÕºœÒ    
-def createImgFromVec(vec):
-    img = Image.new('RGBA', (width,height), (255,255,255,0))    
-    for triangle in vec:
-        tempimg = triangle.getimg()
-        img.paste(tempimg, mask=tempimg)        
-    return img
+#Â∞Ü‰∏âËßíÂΩ¢Êï∞ÁªÑËΩ¨Êç¢‰∏∫ÂõæÂÉè    
+def createImgFromVec(vec, size):
+    target = Image.new('RGB', size, (255, 255, 255, 255))
+    for polygon in vec:
+        target.paste(polygon.getimg(), mask=polygon.getimg())
+    return target
 
-#≈–∂œ“ª∏ˆµ„ «∑Ò‘⁄»˝Ω«–Œ÷–    
-def isinTraiangle(a, b, c, p):
-    def Dot(va, vb):
-        return va[0]*vb[0] + va[1]*vb[1]
-        
-    v0 = (c[0]-a[0], c[1]-a[1])
-    v1 = (b[0]-a[0], b[1]-a[1])
-    v2 = (p[0]-a[0], p[1]-a[1])
-    
-    dot00 = Dot(v0, v0)
-    dot01 = Dot(v0, v1)
-    dot02 = Dot(v0, v2)
-    dot11 = Dot(v1, v1)
-    dot12 = Dot(v1, v2)
-    try:
-        inverDeno = 1.0 / (dot00*dot11 - dot01*dot01)
-    except:
-        return False    
-    u = (dot11*dot02 - dot01*dot12) * inverDeno
-    if u < 0 or u > 1: return False
-    v = (dot00*dot12 - dot01*dot02) * inverDeno
-    if v < 0 or v > 1: return False
-    return u + v <= 1
     
     
 '''
-¥¥Ω®ÀÊª˙»˝Ω«–Œ
+ÂàõÂª∫ÈöèÊú∫‰∏âËßíÂΩ¢
 '''    
-def createPolygon(xlimit, ylimit, posNum):
-    while True:
-        pos = [(random.randint(xlimit[0],xlimit[1]-1), random.randint(ylimit[0],ylimit[1]-1)) \
-                for i in range(posNum)]
-        #–¬»˝Ω«–Œ√Êª˝–Ë“™¥Û”⁄ÕºœÒ√Êª˝µƒ∞Ÿ∑÷÷Æ“ª
-        if getS(pos[0], pos[1], pos[2]) > width*height*0.01: break 
-    color = [(random.randint(colorRange[i][0], colorRange[i][1])) for i in range(3)]        
-    color.append(128)
-    polygon = Polygon(pos, color)
+def createPolygon(size, posNum):
+    pos = [(random.randrange(0, size[0]), random.randrange(0,size[1])) for i in range(posNum)]
+    color = [(random.randrange(0, 256)) for i in range(4)]        
+    polygon = Polygon(pos, color, size)
     return polygon                    
+
     
-#“≈¥´”≈ªØ    
-def geneticoptimize(costf, polygonNum=50, popsize=50, step=1, mutprob=0.5, elite=0.2, maxiter=100):           
-    #¥¥Ω®ºØ»∫  
-    pop = [createPolygon((0,width),(0,height),posNum) for i in range(polygonNum)]
-    bestscore = costf(pop)
-    #÷˜—≠ª∑
+#ÈÅó‰º†‰ºòÂåñ    
+def geneticoptimize(costf, img, imgdir='imgs', polygonNum=50, posNum=3, popsize=50, step=10, mutprob=0.5, elite=0.2, maxiter=100):         
+    if not os.path.exists(imgdir): os.makedirs(imgdir)  
+    #ÂàõÂª∫ÈõÜÁæ§  
+    pop = [createPolygon(img.size,posNum) for i in range(polygonNum)]
+    bestscore = costf(pop, img)
+    #‰∏ªÂæ™ÁéØ
     lastscore = None
-    top = polygonNum*mutprob
     itertime = 0
     i = 1
     totalTime = 0
-    lastindex = None
     while i < maxiter:
-        evolution = False
-        #pop = sorted(pop, key=lambda x:x.score)
-        k = lastindex if lastindex != None else random.randint(0,len(pop)-1)
+        evalution = False
+        k = random.randrange(0,polygonNum)
         old = pop[k]
-        new = Polygon(old.pos, old.color)
+        new = Polygon(old.pos, old.color, img.size)        
         new.mutate()
         pop[k] = new
-        newscore = costf(pop)
+        newscore = costf(pop, img)
         if newscore < bestscore:
             bestscore = newscore
             i += 1
-            evolution = True
-            lastindex = k            
+            evalution = True            
         else: 
             pop[k] = old
-            lastindex = None
-        #¥Ú”°µ±«∞◊Ó”≈÷µ
-        if evolution and i%10 == 0:
+        #ÊâìÂç∞ÂΩìÂâçÊúÄ‰ºòÂÄº
+        if evalution :
             score = bestscore
             nowtime = time.time()
             if lastscore != None:                
                 duration = nowtime - lasttime
                 totalTime += duration
                 scorestd = lastscore - score
-                img = createImgFromVec(pop)
-                img.save(os.path.join(imgdir,'%d.png'%i))
+                logImg = createImgFromVec(pop, img.size)
+                logImg = logImg.filter(ImageFilter.GaussianBlur(radius=1))
+                logImg.save(os.path.join(imgdir,'%d.png'%i))
                 print 'times:%6d    score:%7d    scorestd:%7d    duration:%10f    total:%15f'%(i, score, scorestd, duration, totalTime)
                 logging.debug('%d\t%d\t%d\t%f\t%f'%(i, score, scorestd, duration, totalTime))
             lasttime = nowtime
@@ -172,29 +120,28 @@ def geneticoptimize(costf, polygonNum=50, popsize=50, step=1, mutprob=0.5, elite
 
    
 
-localtime = time.localtime()
-logname = '%d%d%d.log'%(localtime.tm_year, localtime.tm_mon, localtime.tm_mday)            
-logging.basicConfig(
-    level=logging.DEBUG,
-    #format='%(asctime)s %(filename)s[line:%(lineno)d] %(levelname)s %(message)s',
-    format='%(message)s',
-    datefmt='%Y-%m-%d %H:%M:%S',
-    filename=logname,
-    filemode='w') 
+   
+   
+def main(argv):        
+    if len(argv) != 2:
+            sys.exit(0)
+    img = Image.open(argv[1])
     
-imgdir = 'imgs'
-if not os.path.exists(imgdir): os.makedirs(imgdir)
-#∂‡±ﬂ–Œµƒ∂•µ„ ˝
-posNum = 3
-#≤‚ ‘Õº∆¨
-img = Image.open('test.jpg')
-origindata = np.array(img)
-width, height = img.size
-print 'width:%5d,height:%5d'%(width,height)
-#ªÒ»°Õº∆¨—’…´∑∂Œß 
-colorRange = ((origindata[:,:,0].min(),origindata[:,:,0].max()),
-                (origindata[:,:,1].min(),origindata[:,:,1].max()),
-                (origindata[:,:,2].min(),origindata[:,:,2].max()))
-whitedata = np.array(Image.new('RGBA', (100,155), 'white'))
-geneticoptimize(tcost, polygonNum=100, maxiter=100000)
+    localtime = time.localtime()
+    logname = '%d%d%d.log'%(localtime.tm_year, localtime.tm_mon, localtime.tm_mday)            
+    logging.basicConfig(
+        level=logging.DEBUG,
+        #format='%(asctime)s %(filename)s[line:%(lineno)d] %(levelname)s %(message)s',
+        format='%(message)s',
+        datefmt='%Y-%m-%d %H:%M:%S',
+        filename=logname,
+        filemode='w')                
+
+    #ËæìÂÖ•Êó•Âøó
+    logfile = open('log.txt', 'w')    
+    geneticoptimize(tcost, img, polygonNum=50, maxiter=100000)      
+
+
+if __name__ == "__main__":
+    main(sys.argv)
 
